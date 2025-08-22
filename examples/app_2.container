@@ -1,0 +1,7 @@
+service db {
+  image "postgres:16"
+  replicas 1
+  ports 5432:5432
+  env POSTGRES_USER=admin, POSTGRES_PASSWORD=secret
+  volumes "./data:/var/lib/postgresql/data"
+}
