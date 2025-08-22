@@ -1,20 +1,36 @@
-use std::process::{Command, Stdio};
 use crate::ir::{Program, Service};
+use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Copy, Clone)]
 pub struct ExecOptions {
-    pub plan_only: bool,   // if true: print docker commands instead of executing
+    pub plan_only: bool,
 }
 
 pub fn execute(program: &Program, opts: ExecOptions) -> Result<(), String> {
     for svc in &program.services {
-        for i in 0..svc.replicas {
-            let cname = format!("{}-{}", svc.name, i + 1);
+        for _ in 0..svc.replicas {
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| format!("system time error: {e}"))?
+                .as_millis();
+
+            let cname = format!("{}-{}", svc.name, ts);
+
             let args = docker_run_args(&cname, svc);
+
             if opts.plan_only {
                 println!("docker {}", shell_join(&args));
             } else {
-                run_docker(&args)?;
+                let mut cmd = Command::new("docker");
+                cmd.args(&args);
+                cmd.stdout(Stdio::inherit())
+                   .stderr(Stdio::inherit());
+                let status = cmd.status()
+                    .map_err(|e| format!("failed to spawn docker: {e}"))?;
+                if !status.success() {
+                    return Err(format!("docker exited with status {}", status));
+                }
             }
         }
     }
@@ -39,19 +55,6 @@ fn docker_run_args(name: &str, svc: &Service) -> Vec<String> {
     args
 }
 
-fn run_docker(args: &[String]) -> Result<(), String> {
-    let mut cmd = Command::new("docker");
-    cmd.args(args);
-    // inherit stdout/stderr to surface docker errors
-    let status = cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit())
-        .status().map_err(|e| format!("failed to spawn docker: {e}"))?;
-    if !status.success() {
-        return Err(format!("docker exited with status {}", status));
-    }
-    Ok(())
-}
-
-// purely for readable --plan output; not for shell execution
 fn shell_join(args: &[String]) -> String {
     args.iter().map(|a| {
         if a.chars().all(|c| c.is_alphanumeric() || "_-./:=@".contains(c)) {
