@@ -1,0 +1,17 @@
+program   = { service } EOF ;
+service   = "service" ident "{" { service_item } "}" ;
+service_item
+          = image | replicas | ports | env | volumes ;
+image     = "image" (string | ident) ;
+replicas  = "replicas" number ;
+ports     = "ports" port { "," port } ;
+port      = number ":" number ;
+env       = "env" env_kv { "," env_kv } ;
+env_kv    = ident "=" (ident | string) ;
+volumes   = "volumes" string { "," string } ;
+
+ident     = /[A-Za-z_][A-Za-z0-9_-]*/ ;
+number    = /[0-9]+/ ;
+string    = '"' { any-but-quote-or-escaped-quote } '"' ;
+comment   = "#" { not-newline } "\n" ;
+whitespace = " " | "\t" | "\n" | "\r" ;
